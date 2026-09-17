@@ -63,9 +63,10 @@ def dlog(ctx, config):
             ctx.obj['logbooks'].append(logbook)
 
             logbook_path = ctx.obj['home'] / Path(logbook)
-
             if not logbook_path.exists():
                 os.mkdir(logbook_path)
+
+        ctx.obj['logbooks'] = sorted(ctx.obj['logbooks'])
 
         # editor
         if 'editor' in toml:
@@ -135,13 +136,15 @@ def list(ctx, logs):
 #  ──────────────────────────────────────────────────────────────────────────
 # search command
 
-@dlog.command('search', short_help='Searches through your logs.', context_settings=CONTEXT_SETTINGS)
+@dlog.command('search', short_help='Searches through your logs. Records the first hit only.', context_settings=CONTEXT_SETTINGS)
 @click.option('-l', '--logbook', type=str, help="Specified logbook to search.", default=None)
 @click.option('-pm', '--plus-minus', 'plusminus', type=str, help="Lines above (minus) and below (plus) to show: e.g. +plus-minus or -minus+plus.", default=None)
+@click.option('--case', 'case', help="Allows for search with case sensitive REGEX.", default=False, is_flag=True)
 @click.option('-e', '--edit', type=int, help="Opens the specified file from the result list in the editor: e.g. -e 1", default=0)
+@click.option('-c', '--cat', type=int, help="Displays the text of the specified file from the result list to the terminal (cat-ing): e.g. -c 1", default=0)
 @click.argument('regex', type=str)
 @click.pass_context
-def search(ctx, logbook, plusminus, edit, regex):
+def search(ctx, logbook, plusminus, case, edit, cat, regex):
     """
     Searches through your logs for the given REGEX. Searches through all logs unless one is specified. Results are printed as:
 
@@ -149,21 +152,39 @@ def search(ctx, logbook, plusminus, edit, regex):
     line(s)
     """
 
-    def inbook(ctx, logbook, plusminus, edit, regex, result):
+    def inbook(ctx, logbook, plusminus, case, edit, cat, regex, result):
 
         logbook_path = ctx.obj['home'] / Path(logbook)
         file_paths = sorted(logbook_path.glob('*.md'))
+
+        hit = False
 
         for j, file_path in enumerate(file_paths):
 
             date = datetime.utcfromtimestamp(int(file_path.stem)).isoformat()
 
-            with open(file_path, 'r') as file:
+            with click.open_file(file_path, 'r') as file:
 
                 lines = file.readlines()
                 for i, line in enumerate(lines):
 
-                    if re.search(regex, line):
+                    if not case: # for case sensitive regex
+                        regex = regex.lower()
+                        search_line = line.lower()
+
+                    else:
+                        search_line = line
+
+                    # match = re.search(regex, search_line)
+                    match_iter = re.finditer(regex, search_line)
+
+                    matches = []
+                    for match in match_iter:
+                        matches.append(match)
+
+                    if len(matches) > 0:
+
+                        hit = True
 
                         found_line = '[' + str(result) + '] ' + logbook + ': ' + file_path.stem + ': ' + date + ': ' + str(i + 1)
 
@@ -185,15 +206,32 @@ def search(ctx, logbook, plusminus, edit, regex):
                                 else:
                                     click.echo(l.strip('\n'))
 
-                        else:
-
-                            click.echo(click.style(found_line, bold=True))
-                            click.echo(line.strip('\n'))
 
                         if edit == result: # opening specified result in editor
                             click.edit(filename=file_path, editor=ctx.obj['editor'])
+                            ctx.exit()
+
+                        elif cat == result: # cat-ing specified result file to the terminal
+                            click.echo(''.join(lines))
+                            ctx.exit()
+
+                        else:
+                            click.echo(click.style(found_line, bold=True))
+
+                            # echoing hits with blinking
+                            for m, _ in enumerate(matches):
+                                if m == 0:
+                                    line_w_matches = line[0:matches[m].span()[0]] + click.style(line[matches[m].span()[0]:matches[m].span()[1]], blink=True)
+                                else:
+                                    line_w_matches += line[matches[m-1].span()[1]:matches[m].span()[0]] + click.style(line[matches[m].span()[0]:matches[m].span()[1]], blink=True)
+
+                            line_w_matches += line[matches[-1].span()[1]::]
+                            click.echo(line_w_matches.strip('\n'))
 
                         result += 1
+
+        if hit:
+            click.echo() # adding space between logbooks
 
         return result
 
@@ -246,13 +284,13 @@ def search(ctx, logbook, plusminus, edit, regex):
 
     if logbook:
         if logbook in ctx.obj['logbooks']:
-            inbook(ctx, logbook, plusminus, edit, regex, result)
+            inbook(ctx, logbook, plusminus, case, edit, cat, regex, result)
         else:
             logbook_not_found(logbook)
 
     else:
         for logbook in ctx.obj['logbooks']:
-            result = inbook(ctx, logbook, plusminus, edit, regex, result)
+            result = inbook(ctx, logbook, plusminus, case, edit, cat, regex, result)
 
 #  ──────────────────────────────────────────────────────────────────────────
 # git command
