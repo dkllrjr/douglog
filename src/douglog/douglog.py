@@ -10,6 +10,7 @@ import subprocess
 from datetime import datetime
 import importlib.metadata
 
+
 #  ──────────────────────────────────────────────────────────────────────────
 # global variables
 
@@ -18,12 +19,14 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
 @click.command(context_settings=CONTEXT_SETTINGS)
 
+
 #  ──────────────────────────────────────────────────────────────────────────
 # global functions
 
 def logbook_not_found(logbook):
     click.echo(logbook + ' logbook not found in config.')
     exit()
+
 
 #  ──────────────────────────────────────────────────────────────────────────
 # base command
@@ -78,6 +81,7 @@ def dlog(ctx, config):
         click.echo('No config file, exiting.')
         exit()
 
+
 #  ──────────────────────────────────────────────────────────────────────────
 # log command to generate single logs
 
@@ -108,6 +112,7 @@ def log(ctx, logbook):
     else:
         logbook_not_found(logbook)
 
+
 #  ──────────────────────────────────────────────────────────────────────────
 # list command to list logs
 
@@ -132,6 +137,7 @@ def list(ctx, logs):
             click.echo()
 
     exit()
+
 
 #  ──────────────────────────────────────────────────────────────────────────
 # search command
@@ -202,12 +208,12 @@ def search(ctx, logbook, plusminus, case, edit, cat, regex):
                             for l in lines[i-minus:i+plus+1]:
 
                                 if l is line:
-                                    click.echo(click.style(l.strip('\n'), italic=True))
+                                    click.echo(click.style(l.strip('\n'), fg='blue'))
                                 else:
                                     click.echo(l.strip('\n'))
 
 
-                        if edit == result: # opening specified result in editor
+                        elif edit == result: # opening specified result in editor
                             click.edit(filename=file_path, editor=ctx.obj['editor'])
                             ctx.exit()
 
@@ -215,25 +221,22 @@ def search(ctx, logbook, plusminus, case, edit, cat, regex):
                             click.echo(''.join(lines))
                             ctx.exit()
 
-                        else:
+                        elif not cat:
                             click.echo(click.style(found_line, bold=True))
 
                             # echoing hits with blinking
                             for m, _ in enumerate(matches):
                                 if m == 0:
-                                    line_w_matches = line[0:matches[m].span()[0]] + click.style(line[matches[m].span()[0]:matches[m].span()[1]], blink=True)
+                                    line_w_matches = line[0:matches[m].span()[0]] + click.style(line[matches[m].span()[0]:matches[m].span()[1]], blink=True, fg='red')
                                 else:
-                                    line_w_matches += line[matches[m-1].span()[1]:matches[m].span()[0]] + click.style(line[matches[m].span()[0]:matches[m].span()[1]], blink=True)
+                                    line_w_matches += line[matches[m-1].span()[1]:matches[m].span()[0]] + click.style(line[matches[m].span()[0]:matches[m].span()[1]], blink=True, fg='red')
 
                             line_w_matches += line[matches[-1].span()[1]::]
                             click.echo(line_w_matches.strip('\n'))
 
                         result += 1
 
-        if hit:
-            click.echo() # adding space between logbooks
-
-        return result
+        return result, hit
 
     
     def interpret_plusminus(plusminus):
@@ -289,8 +292,12 @@ def search(ctx, logbook, plusminus, case, edit, cat, regex):
             logbook_not_found(logbook)
 
     else:
-        for logbook in ctx.obj['logbooks']:
-            result = inbook(ctx, logbook, plusminus, case, edit, cat, regex, result)
+        for logbook_i, logbook in enumerate(ctx.obj['logbooks']):
+            result, hit = inbook(ctx, logbook, plusminus, case, edit, cat, regex, result)
+
+            if logbook_i < len(ctx.obj['logbooks']) - 1 and hit and not cat:
+                click.echo() # adding space between logbooks
+
 
 #  ──────────────────────────────────────────────────────────────────────────
 # git command
@@ -310,6 +317,7 @@ def git(ctx, git_commands):
         command.append(arg)
 
     subprocess.run(command)
+
 
 #  ──────────────────────────────────────────────────────────────────────────
 # delete command
