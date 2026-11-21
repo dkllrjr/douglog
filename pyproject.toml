@@ -9,7 +9,7 @@ where = ["src"]
 
 [project]
 name = "douglog"
-version = "21.11.2026"
+version = "1.0.0"
 description = "Simple logging CLI tool"
 readme = "README.md"
 authors = [
